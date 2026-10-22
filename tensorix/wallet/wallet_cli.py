@@ -8,6 +8,7 @@ import sys
 import json
 import argparse
 import httpx
+from decimal import Decimal, InvalidOperation, localcontext
 
 if sys.platform == "win32":
     try:
@@ -16,11 +17,27 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from ..blockchain.transaction import Transaction, COIN
+from ..blockchain.transaction import Transaction, COIN, MIN_TX_FEE, valid_address
 from ..consensus.crypto import generate_keypair, pub_to_address
 
 DEFAULT_WALLET_FILE = "tensorix_wallet.json"
 DEFAULT_NODE_URL = "http://127.0.0.1:8333"
+
+
+def tnx_to_units(value, *, name: str) -> int:
+    """Parse a positive TNX amount without rounding or binary float truncation."""
+    try:
+        amount = Decimal(str(value))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"{name} must be a finite positive TNX amount") from exc
+    if not amount.is_finite() or amount <= 0:
+        raise ValueError(f"{name} must be a finite positive TNX amount")
+    with localcontext() as context:
+        context.prec = max(28, len(amount.as_tuple().digits) + 8)
+        units = amount * COIN
+    if units != units.to_integral_value():
+        raise ValueError(f"{name} supports at most 8 decimal places")
+    return int(units)
 
 
 def create_wallet(filepath: str = DEFAULT_WALLET_FILE):
@@ -80,24 +97,24 @@ def check_balance(node_url: str = DEFAULT_NODE_URL, filepath: str = DEFAULT_WALL
 
 def send_tnx(
     recipient: str,
-    amount_tnx: float,
-    fee_tnx: float = 10.0,
+    amount_tnx: str | float,
+    fee_tnx: str | float = "10",
     node_url: str = DEFAULT_NODE_URL,
     filepath: str = DEFAULT_WALLET_FILE
 ):
+    try:
+        amount_units = tnx_to_units(amount_tnx, name="Amount")
+        fee_units = tnx_to_units(fee_tnx, name="Fee")
+        if fee_units < MIN_TX_FEE:
+            raise ValueError("Wallet-to-wallet transfers require a fee of at least 10 TNX")
+        if not valid_address(recipient):
+            raise ValueError("A complete TNX recipient address is required")
+    except ValueError as exc:
+        print(f"❌ Error: {exc}")
+        return
+
     wallet = load_wallet(filepath)
     sender = wallet["address"]
-    
-    if fee_tnx < 10.0:
-        print(f"⚠️ Notice: Minimum transaction fee is 10.0 TNX. Setting fee to 10.0 TNX.")
-        fee_tnx = 10.0
-
-    amount_units = int(amount_tnx * COIN)
-    fee_units = int(fee_tnx * COIN)
-    
-    if not recipient.startswith("tnx1"):
-        print("❌ Error: Invalid recipient address format (must start with 'tnx1').")
-        return
 
     # 1. Fetch current sender nonce and balance from node
     balance_url = f"{node_url.rstrip('/')}/balance/{sender}"
@@ -147,8 +164,8 @@ def send_tnx(
                 print("=" * 60)
                 print(f"🚀 TRANSACTION BROADCASTED SUCCESSFULLY!")
                 print(f"TxID:        {tx.txid}")
-                print(f"Amount:      {amount_tnx:.6f} TNX -> {recipient}")
-                print(f"Fee:         {fee_tnx:.6f} TNX")
+                print(f"Amount:      {Decimal(amount_units) / COIN:.8f} TNX -> {recipient}")
+                print(f"Fee:         {Decimal(fee_units) / COIN:.8f} TNX")
                 print("=" * 60)
             else:
                 print(f"❌ Transaction rejected by node: {res.text}")
@@ -176,8 +193,8 @@ def main():
     # send
     sub_send = subparsers.add_parser("send", help="Send TNX coins")
     sub_send.add_argument("--to", required=True, help="Recipient TNX address")
-    sub_send.add_argument("--amount", type=float, required=True, help="Amount in TNX")
-    sub_send.add_argument("--fee", type=float, default=10.0, help="Transaction fee in TNX (min 10.0 TNX -> Founder Wallet)")
+    sub_send.add_argument("--amount", required=True, help="Amount in TNX (up to 8 decimal places)")
+    sub_send.add_argument("--fee", default="10", help="Wallet transfer fee in TNX (default/minimum 10 TNX -> Founder Wallet)")
     sub_send.add_argument("--node", default=DEFAULT_NODE_URL, help="Node URL")
     sub_send.add_argument("--file", default=DEFAULT_WALLET_FILE, help="Wallet file path")
 

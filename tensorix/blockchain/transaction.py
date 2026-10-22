@@ -74,15 +74,15 @@ class Transaction:
         """Check if this is a mining reward transaction."""
         return self.sender == "COINBASE"
 
-    def is_valid(self) -> bool:
-        """Verify transaction signature, format, and address ownership."""
+    def is_valid(self, *, minimum_fee: int = MIN_TX_FEE) -> bool:
+        """Verify signatures; only block validation may select historical fee rules."""
         if not valid_address(self.recipient) or self.nonce < 0 or self.fee < 0:
             return False
         if self.txid != self.calculate_txid():
             return False
         if self.is_coinbase():
             return self.amount >= 0 and self.fee == 0 and not self.public_key and not self.signature
-        if self.amount <= 0 or self.fee < MIN_TX_FEE or not valid_address(self.sender):
+        if self.amount <= 0 or self.fee < minimum_fee or not valid_address(self.sender):
             return False
         if not self.signature or not self.public_key:
             return False

@@ -27,6 +27,16 @@ POOL_FEE_PCT = 0.02              # 2% Mining Pool fee -> Founder Wallet
 MIN_TX_FEE = 10 * COIN           # 10 TNX Transaction fee -> Founder Wallet
 GENESIS_HASH = "0003692a2068dc16ed9092c63a22d35f74e8b0e213918a88d10f3e37bdba315b"
 
+# This exact pre-upgrade block used the original fee-to-coinbase accounting.
+# The real PoW/hash binding is still verified before its transactions are accepted.
+# No other block, mempool admission or wallet transfer receives this exception.
+LEGACY_FEE_BLOCK_HEIGHT = 2
+LEGACY_FEE_BLOCK_HASH = "000d11c2869efd16eff2d04e79f75bd6b807c4935b21e7b11c91baa9f7749de5"
+
+
+def uses_legacy_fee_rules(block: Block) -> bool:
+    return block.index == LEGACY_FEE_BLOCK_HEIGHT and block.hash == LEGACY_FEE_BLOCK_HASH
+
 
 def locked(method):
     @wraps(method)
@@ -116,6 +126,7 @@ class Blockchain:
 
     def apply_block_to_state(self, block: Block):
         """Update account balances and transaction nonces."""
+        legacy_fees = uses_legacy_fee_rules(block)
         for tx in block.transactions:
             if tx.is_coinbase():
                 self.balances[tx.recipient] = self.balances.get(tx.recipient, 0) + tx.amount
@@ -123,8 +134,9 @@ class Blockchain:
                 total_deduction = tx.amount + tx.fee
                 self.balances[tx.sender] = self.balances.get(tx.sender, 0) - total_deduction
                 self.balances[tx.recipient] = self.balances.get(tx.recipient, 0) + tx.amount
-                # 100% of transaction fees are routed directly to Founder Wallet
-                self.balances[FOUNDER_ADDRESS] = self.balances.get(FOUNDER_ADDRESS, 0) + tx.fee
+                # Legacy block 2 already includes its fee in its coinbase reward.
+                if not legacy_fees:
+                    self.balances[FOUNDER_ADDRESS] = self.balances.get(FOUNDER_ADDRESS, 0) + tx.fee
                 self.account_nonces[tx.sender] = tx.nonce + 1
 
     @locked
@@ -306,6 +318,8 @@ class Blockchain:
         coinbase_txs: List[Transaction] = []
         regular_txs: List[Transaction] = []
         seen_regular = False
+        legacy_fees = uses_legacy_fee_rules(block)
+        minimum_fee = 0 if legacy_fees else MIN_TX_FEE
 
         for tx in block.transactions:
             if tx.is_coinbase():
@@ -316,9 +330,9 @@ class Blockchain:
                 coinbase_txs.append(tx)
             else:
                 seen_regular = True
-                if tx.fee < MIN_TX_FEE:
-                    return False, f"Tx {tx.txid} fee too low: min fee is {MIN_TX_FEE / COIN} TNX."
-                if not tx.is_valid():
+                if tx.fee < minimum_fee:
+                    return False, f"Tx {tx.txid} fee too low: min fee is {minimum_fee / COIN} TNX."
+                if not tx.is_valid(minimum_fee=minimum_fee):
                     return False, f"Invalid transaction signature or format for tx {tx.txid}."
                 regular_txs.append(tx)
 
@@ -326,6 +340,8 @@ class Blockchain:
             return False, "Block must contain at least one Coinbase transaction."
 
         max_allowed_reward = self.get_block_reward(block.index)
+        if legacy_fees:
+            max_allowed_reward += sum(tx.fee for tx in regular_txs)
         total_coinbase = sum(tx.amount for tx in coinbase_txs)
 
         if total_coinbase > max_allowed_reward:
@@ -351,7 +367,8 @@ class Blockchain:
                 return False, "Transaction overspends its account balance."
             balances[tx.sender] -= debit
             balances[tx.recipient] = balances.get(tx.recipient, 0) + tx.amount
-            balances[FOUNDER_ADDRESS] = balances.get(FOUNDER_ADDRESS, 0) + tx.fee
+            if not legacy_fees:
+                balances[FOUNDER_ADDRESS] = balances.get(FOUNDER_ADDRESS, 0) + tx.fee
             nonces[tx.sender] = tx.nonce + 1
 
         # Apply block to state and remove confirmed transactions from mempool

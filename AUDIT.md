@@ -49,3 +49,19 @@ The suite now contains 31 tests and passes on Windows Python 3.12 with the pinne
 The operator's original ledger was copied for validation; the original SHA-256 stayed `701d6a27e1d3b527493748a66582999763de8bcfc8ad9dfa3204fec4f2db3c29`. Validation failed on a historical transaction with a fee below the current 10 TNX minimum. The original was not rewritten, replaced or restarted with an empty chain. Deployment over that ledger is blocked until historical fee rules and any migration are decided explicitly.
 
 No mining fee, beneficiary, reward schedule, genesis, live data, GPU settings or node ports were changed by these checks. This is a source publication candidate for review, not a production or CUDA binary release.
+
+## Wallet-transfer fee clarification and historical compatibility
+
+The owner clarified that 10 TNX is the fee for wallet-to-wallet transfers. Mining reward transactions must not incur this 10 TNX transaction fee. The existing 2% mining subsidy split and legacy miner scheduler were left unchanged.
+
+The original public ZIP establishes the older accounting: regular transactions allowed nonnegative fees, the default was 0.0001 TNX, and fees were included in the mining coinbase. Historical block 2 contains a signed transfer of 5 TNX with a 0.0001 TNX fee and a 10.0001 TNX coinbase. Lowering the minimum alone would still reject that old coinbase, and crediting its fee through both accounting paths would add it twice.
+
+The review candidate pins the compatibility rule to height 2 and its exact BLAKE3/Tensor-PoW block hash `000d11c2869efd16eff2d04e79f75bd6b807c4935b21e7b11c91baa9f7749de5`. It verifies the real proof and claimed hash before using the original fee-to-coinbase rules for this block. Its transaction signatures, IDs, balances, nonces and Merkle root remain validated. Changing its claimed hash or nonce is rejected. Every other block and every new wallet/mempool request retains the 10 TNX minimum. The original history is not re-signed, re-mined, charged another fee or reset.
+
+Wallet input conversion now preserves atomic units using decimal arithmetic. For instance, 0.00000003 TNX stays three atomic units. Invalid, nonfinite, negative and over-precision values, malformed recipient addresses and sub-minimum fees are rejected before loading wallet keys or contacting the node.
+
+All 42 offline regressions passed on Windows. New accounting tests prove that a 5 TNX transfer with the default fee debits 15 TNX, pays 5 TNX to the recipient and credits 10 TNX to the founder once. Separate tests prove that coinbase transaction fees are zero, their existing 9.8/0.2 TNX split is retained, new low-fee transfers are rejected in mempool and blocks, and new coinbases cannot also collect the transfer fee. Accounting tests deliberately stub PoW; historical fixtures and the complete replay below do not.
+
+A separate temporary-copy replay verified all 92 original blocks with real PoW, reaching height 91 and tip `00001ce7451638c19670b53a1530afa2f099e4d0ec8442ad5d2d1e959e1bf605`. All account balances and nonces exactly matched the original fee-to-coinbase accounting. Their sum remained 920 TNX. An in-process node/API startup over that copy reported height 91 and produced a height-92 template with 9.8/0.2 TNX subsidy outputs and zero coinbase transaction fees. Both original and temporary ledger bytes stayed unchanged; original SHA-256 remains `701d6a27e1d3b527493748a66582999763de8bcfc8ad9dfa3204fec4f2db3c29`.
+
+This is an explicit historical consensus compatibility rule in the source review candidate. The live installation has not been replaced, and no real wallet transfer, mining session or public production deployment was performed by these tests.

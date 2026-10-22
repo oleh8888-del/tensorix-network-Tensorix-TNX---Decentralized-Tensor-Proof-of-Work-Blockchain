@@ -6,7 +6,7 @@ The mining loop executes the NumPy CPU reference hash. Installing CuPy does not 
 
 ## What was checked
 
-An isolated Windows run passed 31 regressions on 22 October 2026: real proof verification of the existing public genesis and a BLAKE3 vector, block identity/difficulty checks, account balance/nonce/transaction validation, fail-closed disk loading, per-worker Stratum payout templates, duplicate rejection, concurrent block submission, rollback after a failed disk commit and HTTP API integration. Account and Stratum tests stub PoW where necessary; these are not GPU mining or internet production tests. See `AUDIT.md`.
+An isolated Windows run passed 42 regressions on 22 October 2026: real proof verification of the existing public genesis and historical block 2, a BLAKE3 vector, block identity/difficulty checks, account balance/nonce/transaction validation, transfer-fee routing, exact decimal wallet amounts, fail-closed disk loading, per-worker Stratum payout templates, duplicate rejection, concurrent block submission, rollback after a failed disk commit and HTTP API integration. Account and Stratum tests stub PoW where necessary; these are not GPU mining or internet production tests. A separate replay verified all 92 existing operator blocks with real PoW and preserved their original balances and nonces. See `AUDIT.md`.
 
 ## Fees: read before mining
 
@@ -19,6 +19,10 @@ The fee mechanisms are preserved for review; no fee policy was silently changed:
 | Transaction fee | Minimum 10 TNX per regular transaction, separate from mining fees | Same founder |
 
 Public recipient: `tnx1b050bd6e525ac254ab212efce117cc636eb1166e`.
+
+The 10 TNX transaction fee applies to signed wallet-to-wallet transfers. For example, sending 5 TNX with the default fee debits 15 TNX from the sender, credits 5 TNX to the recipient and credits the 10 TNX fee once to the founder when the block is accepted. Mining coinbase transactions have a transaction fee of zero; their separate 2% subsidy split is unchanged. The wallet parses amounts as exact decimal atomic units and rejects amounts with more than eight meaningful decimal places.
+
+Historical block 2 predates these transfer-fee rules: it contains a 5 TNX transfer with a 0.0001 TNX fee included in its 10.0001 TNX coinbase. Only that exact block at height 2 with hash `000d11c2869efd16eff2d04e79f75bd6b807c4935b21e7b11c91baa9f7749de5` receives the original fee-to-coinbase accounting. Its PoW, hash binding, signatures, Merkle root, account balances and nonce are still checked. The old fee is not credited a second time. All other new blocks, wallet requests and mempool admission continue to require at least 10 TNX per regular transfer.
 
 If both separate mining fee mechanisms operated reliably, their combined expected deduction would be 3.96%. This code must not be advertised as a guaranteed single 2% total fee until the intended policy is selected and tested.
 
@@ -44,13 +48,13 @@ python start_node.py
 
 Default listeners use loopback: node `127.0.0.1:8333`, optional relay `127.0.0.1:3333`. The legacy relay uses a Tensorix-specific notify payload and is not demonstrated to work with arbitrary Bitcoin Stratum V1 miners. No public TNX endpoint or two operating TNX Docker pools have been verified.
 
-Never replace an existing chain with an empty data directory to work around a validation failure. A read-only check of a copy of the operator's legacy ledger failed because it contains a transaction below the enforced 10 TNX minimum fee. The original ledger's SHA-256 remained unchanged. This source must not replace that live node until historical validation and migration policy have been resolved explicitly.
+Never replace an existing chain with an empty data directory to work around a validation failure. The historical fee compatibility rule above allowed the complete existing 92-block ledger to load without rewriting it or changing its balances. Its original SHA-256 remained unchanged. These checks used temporary data copies; the live node has not been replaced by this review candidate.
 
 ## Remaining release decisions
 
 1. Select a single 2% mining fee or explicitly disclose and implement separate mining fees; the legacy scheduler remains unreliable.
 2. Resolve the emission mismatch: the declared 21 million cap is not enforced. Current integer halving arithmetic emits 21,023,999.863344 TNX in total. This branch preserves that arithmetic.
 3. Implement and verify a real GPU kernel before making CUDA/Tensor Core performance claims.
-4. Complete a ledger compatibility/migration review, node/API integration and adversarial network testing before a public deployment.
+4. Review the explicitly pinned historical fee compatibility rule and complete adversarial network testing before a public deployment.
 
 No wallets, private keys, credential files or live chain state are included.

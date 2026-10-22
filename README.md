@@ -1,8 +1,8 @@
-# Tensorix TNX — experimental reference and validation audit
+# Tensorix TNX — experimental Tensor Core miner and validation audit
 
-This branch is an auditable Python prototype, not a production coin launch or a verified CUDA miner release. The pre-existing `tensorix-v1.0.0-windows-cuda.zip` is a legacy unverified artifact and is not the source or the tested build for this branch. No new executable release is provided.
+This branch is an auditable experimental network implementation. A new GPU backend executes both INT8 matrix rounds with NVIDIA Tensor Core MMA instructions and executes BLAKE3 on CUDA. The pre-existing `tensorix-v1.0.0-windows-cuda.zip` is a legacy unverified artifact and is not the source or the tested build for this branch. The distribution contains Python source and pinned dependencies, not a standalone EXE.
 
-The mining loop executes the NumPy CPU reference hash. Installing CuPy does not turn it into a Tensor Core miner. CUDA/Tensor Core acceleration, ASIC resistance, decentralized network operation and production security have not been demonstrated.
+The original `start_miner.py` remains a CPU reference for compatibility and validation. Use `start_gpu_miner.py` for actual GPU mining. Its full PoW pipeline uses CUDA BLAKE3 stages and INT8 `mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32` Tensor Core instructions. It fails when CUDA is unavailable; there is no CPU matrix or hash fallback. ASIC resistance, decentralized network operation and production security have not been demonstrated.
 
 ## What was checked
 
@@ -54,7 +54,22 @@ Never replace an existing chain with an empty data directory to work around a va
 
 1. Select a single 2% mining fee or explicitly disclose and implement separate mining fees; the legacy scheduler remains unreliable.
 2. Resolve the emission mismatch: the declared 21 million cap is not enforced. Current integer halving arithmetic emits 21,023,999.863344 TNX in total. This branch preserves that arithmetic.
-3. Implement and verify a real GPU kernel before making CUDA/Tensor Core performance claims.
+3. Broaden GPU compatibility and performance testing beyond the two tested RTX 50-series cards; no speed or profitability guarantee is made.
 4. Review the explicitly pinned historical fee compatibility rule and complete adversarial network testing before a public deployment.
 
 No wallets, private keys, credential files or live chain state are included.
+
+## Tensor Core GPU evaluation
+
+The existing 64×64 INT8 / INT32 PoW contract is unchanged. Full PoW vectors match the CPU reference on RTX 5060 Ti and RTX 5060. The GPU path includes BLAKE3 seed generation, expansion, matrix output hashing and final proof hashing. The CPU reference remains the independent consensus verifier.
+
+```sh
+python -m pip install -r requirements-gpu.txt
+python start_gpu_miner.py --address YOUR_COMPLETE_TNX_ADDRESS --device 0
+# A second terminal for a second card:
+python start_gpu_miner.py --address YOUR_COMPLETE_TNX_ADDRESS --device 1
+```
+
+A sufficiently recent NVIDIA driver and a CUDA-capable GPU with compute capability 8.0 or newer are required by this experimental build. Only RTX 5060 Ti and RTX 5060 are currently hardware-tested. The default URL is the public Docker node gateway. The operator PC must stay online.
+
+The GPU miner retains the original dev scheduler without claiming that it guarantees 2% work. All on-chain fee rules remain unchanged.

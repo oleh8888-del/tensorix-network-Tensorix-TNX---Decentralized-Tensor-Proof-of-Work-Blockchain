@@ -65,3 +65,13 @@ All 42 offline regressions passed on Windows. New accounting tests prove that a 
 A separate temporary-copy replay verified all 92 original blocks with real PoW, reaching height 91 and tip `00001ce7451638c19670b53a1530afa2f099e4d0ec8442ad5d2d1e959e1bf605`. All account balances and nonces exactly matched the original fee-to-coinbase accounting. Their sum remained 920 TNX. An in-process node/API startup over that copy reported height 91 and produced a height-92 template with 9.8/0.2 TNX subsidy outputs and zero coinbase transaction fees. Both original and temporary ledger bytes stayed unchanged; original SHA-256 remains `701d6a27e1d3b527493748a66582999763de8bcfc8ad9dfa3204fec4f2db3c29`.
 
 This is an explicit historical consensus compatibility rule in the source review candidate. The live installation has not been replaced, and no real wallet transfer, mining session or public production deployment was performed by these tests.
+
+## 22 October 2026: GPU Tensor Core implementation
+
+The original miner banner identified GPUs but `mine_job_gpu` called `tensor_pow_hash_cpu`. This revision adds a separate actual GPU miner; no original runtime or ledger was overwritten.
+
+`start_gpu_miner.py` uses `CudaMiner` and `TensorCudaBackend`. Both 64×64 signed INT8 multiplication rounds use the hardware Tensor Core instruction `mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`, with signed INT32 accumulation. The negative-modulo behavior of round two matches NumPy. CUDA kernels also implement the fixed-length BLAKE3 seed, expansion, 17-chunk tree hash and final hash. There is no CPU hashing fallback on this path.
+
+Ten complete PoW vectors per card matched the independent CPU reference on RTX 5060 Ti and RTX 5060, including maximum uint64 nonces. Larger 256-nonce batches matched sampled reference outputs. Each card found a real PoW block in an isolated copy starting with historical blocks0–2; the node accepted, persisted and reloaded each block. Each 10 TNX subsidy split9.8 to the test miner address and0.2 to the founder, with coinbase transfer fee0. The production92-block ledger remained byte-for-byte unchanged. These are isolated GPU acceptance tests, not evidence of independent internet mining or production network security.
+
+The existing consensus hash and fee policy are preserved. The GPU miner retains the legacy dev scheduler and its limitations described above. Hardware testing currently covers only those two RTX50-series cards.

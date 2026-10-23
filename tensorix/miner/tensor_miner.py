@@ -24,8 +24,6 @@ from ..consensus.crypto import hash256
 from ..consensus.tensor_pow import MATRIX_DIM, tensor_pow_hash_cpu
 
 FOUNDER_ADDRESS = "tnx1b050bd6e525ac254ab212efce117cc636eb1166e"
-DEV_FEE_PCT = 0.02
-DEV_FEE_INTERVAL = 50  # 1 in 50 jobs = 2% Dev Fee -> Founder Wallet
 
 
 class TensorMiner:
@@ -42,20 +40,15 @@ class TensorMiner:
         self.dev_name = "CPU reference (NumPy INT32)"
 
     def fetch_job(self) -> dict:
-        """Fetch latest candidate block template from the node."""
+        """Fetch work for the configured miner; the node applies the sole 2% subsidy split."""
         self.job_counter += 1
-        is_dev_fee = (self.job_counter % DEV_FEE_INTERVAL == 0) and (self.payout_address != FOUNDER_ADDRESS)
-        target_payout = FOUNDER_ADDRESS if is_dev_fee else self.payout_address
-        if is_dev_fee:
-            print(f"\n🎁 [Miner Dev Fee 2%] Mining job #{self.job_counter} for Founder Wallet: {FOUNDER_ADDRESS}")
-
-        url = f"{self.node_url}/mining/template?address={target_payout}"
+        url = f"{self.node_url}/mining/template"
         try:
             with httpx.Client(timeout=10.0) as client:
-                res = client.get(url)
+                res = client.get(url, params={"address": self.payout_address})
                 if res.status_code == 200:
                     data = res.json()
-                    data["_is_dev_fee"] = is_dev_fee
+                    data["_is_dev_fee"] = False
                     return data
         except Exception as e:
             print(f"[Miner] Failed to connect to node at {self.node_url}: {e}")

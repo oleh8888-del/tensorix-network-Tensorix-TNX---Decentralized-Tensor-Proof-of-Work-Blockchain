@@ -47,7 +47,7 @@ class CudaMiner(TensorMiner):
         print(f'TENSORIX GPU CUDA MINER — {self.dev_name} (device {self.device_id})')
         print('INT8 Tensor Core matrix rounds; BLAKE3 also executes on the GPU.')
         print('On-chain subsidy split: 98% miner / 2% founder.')
-        print('Additional legacy dev scheduler retained; it does not guarantee 2% of work. See AUDIT.md.')
+        print('No additional miner developer fee; all work targets your configured payout address.')
         while True:
             job = self.fetch_job()
             if job:

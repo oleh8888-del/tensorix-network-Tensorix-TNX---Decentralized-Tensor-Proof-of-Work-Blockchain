@@ -1,4 +1,6 @@
-# Tensorix validation and fee audit — 22 October 2026
+# Tensorix validation and fee audit — updated 24 October 2026
+
+Current fee policy: the extra miner template scheduler has been removed. The dated historical sections below describe prior revisions; see the final 24 October section for the current release.
 
 ## Scope and result
 
@@ -75,3 +77,8 @@ The original miner banner identified GPUs but `mine_job_gpu` called `tensor_pow_
 Ten complete PoW vectors per card matched the independent CPU reference on RTX 5060 Ti and RTX 5060, including maximum uint64 nonces. Larger 256-nonce batches matched sampled reference outputs. Each card found a real PoW block in an isolated copy starting with historical blocks0–2; the node accepted, persisted and reloaded each block. Each 10 TNX subsidy split9.8 to the test miner address and0.2 to the founder, with coinbase transfer fee0. The production92-block ledger remained byte-for-byte unchanged. These are isolated GPU acceptance tests, not evidence of independent internet mining or production network security.
 
 The existing consensus hash and fee policy are preserved. The GPU miner retains the legacy dev scheduler and its limitations described above. Hardware testing currently covers only those two RTX50-series cards.
+
+
+## 24 October 2026: a single mining fee
+
+The owner instructed completion of the single-2% fee policy. Removed every-50th-template redirection from the shared CPU/GPU miner job fetch. Every job now uses the configured payout address; refresh polls and process restarts cannot add a second mining fee. The node continues to enforce its existing 98% miner / 2% founder subsidy split. The founder address, 10 TNX regular transfer fee, coinbase transfer fee zero, emission arithmetic, genesis and all historical compatibility rules are unchanged. No live ledger is rewritten by this source change. Regression tests check 150 consecutive template requests through each miner path and three restarted sessions crossing the former fee boundary.

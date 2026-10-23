@@ -10,12 +10,12 @@ An isolated Windows run passed 42 regressions on 22 October 2026: real proof ver
 
 ## Fees: read before mining
 
-The fee mechanisms are preserved for review; no fee policy was silently changed:
+Current release: one mining fee, enforced by the existing on-chain 98% / 2% subsidy split. The additional template-redirect scheduler was explicitly removed on 24 October 2026:
 
 | Mechanism | Current code | Recipient |
 | --- | --- | --- |
 | Block reward split | 2% of subsidy for an external miner; a 10 TNX subsidy is split 9.8 / 0.2 | Founder address below |
-| Legacy miner dev scheduler | Every 50th template request redirects to the founder; isolated tests show this does not guarantee 2% of mining work | Same founder |
+| Additional miner dev fee | None: every template request uses the configured miner payout address | None |
 | Transaction fee | Minimum 10 TNX per regular transaction, separate from mining fees | Same founder |
 
 Public recipient: `tnx1b050bd6e525ac254ab212efce117cc636eb1166e`.
@@ -24,7 +24,7 @@ The 10 TNX transaction fee applies to signed wallet-to-wallet transfers. For exa
 
 Historical block 2 predates these transfer-fee rules: it contains a 5 TNX transfer with a 0.0001 TNX fee included in its 10.0001 TNX coinbase. Only that exact block at height 2 with hash `000d11c2869efd16eff2d04e79f75bd6b807c4935b21e7b11c91baa9f7749de5` receives the original fee-to-coinbase accounting. Its PoW, hash binding, signatures, Merkle root, account balances and nonce are still checked. The old fee is not credited a second time. All other new blocks, wallet requests and mempool admission continue to require at least 10 TNX per regular transfer.
 
-If both separate mining fee mechanisms operated reliably, their combined expected deduction would be 3.96%. This code must not be advertised as a guaranteed single 2% total fee until the intended policy is selected and tested.
+Older releases retained an additional legacy scheduler and could not be described as a single 2% mining fee. Upgrade to this release to remove that extra redirection. The separate 10 TNX wallet-transfer fee is unchanged.
 
 The Stratum component is a solo relay: each worker's block template pays that worker and the founder. There is no tested shared PPLNS/PPS payout ledger for TNX in this branch.
 
@@ -52,10 +52,9 @@ Never replace an existing chain with an empty data directory to work around a va
 
 ## Remaining release decisions
 
-1. Select a single 2% mining fee or explicitly disclose and implement separate mining fees; the legacy scheduler remains unreliable.
-2. Resolve the emission mismatch: the declared 21 million cap is not enforced. Current integer halving arithmetic emits 21,023,999.863344 TNX in total. This branch preserves that arithmetic.
-3. Broaden GPU compatibility and performance testing beyond the two tested RTX 50-series cards; no speed or profitability guarantee is made.
-4. Review the explicitly pinned historical fee compatibility rule and complete adversarial network testing before a public deployment.
+1. Resolve the emission mismatch: the declared 21 million cap is not enforced. Current integer halving arithmetic emits 21,023,999.863344 TNX in total. This branch preserves that arithmetic.
+2. Broaden GPU compatibility and performance testing beyond the two tested RTX 50-series cards; no speed or profitability guarantee is made.
+3. Review the explicitly pinned historical fee compatibility rule and complete adversarial network testing before a public deployment.
 
 No wallets, private keys, credential files or live chain state are included.
 
@@ -72,4 +71,4 @@ python start_gpu_miner.py --address YOUR_COMPLETE_TNX_ADDRESS --device 1
 
 A sufficiently recent NVIDIA driver and a CUDA-capable GPU with compute capability 8.0 or newer are required by this experimental build. Only RTX 5060 Ti and RTX 5060 are currently hardware-tested. The default URL is the public Docker node gateway. The operator PC must stay online.
 
-The GPU miner retains the original dev scheduler without claiming that it guarantees 2% work. All on-chain fee rules remain unchanged.
+The GPU and CPU-reference miners have no additional developer scheduler. Both always request work for the configured miner address. The existing on-chain 2% subsidy split and separate transfer-fee rules are unchanged.
